@@ -6,19 +6,74 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  TouchableOpacity
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PickerField } from '@/components/PickerField';
+import { useRouter } from 'expo-router';
 
-type Player = { name: string; gender: 'Male' | 'Female' | '' };
+type Player = { name: string; gender: 'Male' | 'Female' | ''; role: 'Doctor' | 'Sheriff' | 'Mafia' | 'Civilian' | '' };
 
 const MafiaSetupScreen: React.FC = () => {
+
+  const router = useRouter();
+
   const [numPlayers, setNumPlayers] = useState<number | null>(null);
   const [numMafia,  setNumMafia]  = useState<number | null>(null);
   const [players,   setPlayers]   = useState<Player[]>([]);
 
   const maxMafia = numPlayers ? Math.floor(numPlayers / 3) : 0;
+
+  const allFieldsFilled =
+  numPlayers !== null &&
+  numMafia !== null &&
+  players.length === numPlayers &&
+  players.every(
+    (p) => p.name.trim() && p.gender
+  );
+
+  const getRoles = (numPlayers: number, numMafia: number): string[] => {
+  const roles: string[] = [];
+
+  // Add roles
+  roles.push('Doctor');
+  roles.push('Sheriff');
+
+  // Add Mafia
+  for (let i = 0; i < numMafia; i++) {
+    roles.push('Mafia');
+  }
+
+  // Fill remaining players with Civilian
+  const remaining = numPlayers - roles.length;
+  for (let i = 0; i < remaining; i++) {
+    roles.push('Civilian');
+  }
+
+  return roles;
+};
+
+const shuffle = <T,>(array: T[]): T[] => {
+  return [...array].sort(() => Math.random() - 0.5);
+};
+
+const handleStartGame = () => {
+  if (!numPlayers || !numMafia) return;
+
+  const shuffledRoles = shuffle(getRoles(numPlayers, numMafia));
+
+  const playersWithRoles = players.map((player, index) => ({
+    ...player,
+    role: shuffledRoles[index],
+  }));
+
+  const serializedPlayers = encodeURIComponent(JSON.stringify(playersWithRoles));
+
+  router.push(`/game?players=${serializedPlayers}`);
+
+  // Proceed to game screen, pass playersWithRoles
+};
 
   /* ── keep players[] length in sync with numPlayers ────────────── */
   useEffect(() => {
@@ -33,7 +88,7 @@ const MafiaSetupScreen: React.FC = () => {
         // add empty players
         return [
           ...prev,
-          ...Array(numPlayers - prev.length).fill({ name: '', gender: '' }),
+          ...Array(numPlayers - prev.length).fill({ name: '', gender: '', role: '' }),
         ];
       }
       if (prev.length > numPlayers) {
@@ -112,9 +167,33 @@ const MafiaSetupScreen: React.FC = () => {
                 options={['Male', 'Female']}
                 placeholder="Gender"
                 />
+
+                {/* <PickerField
+                style={styles.input}           // ⬅ same look/size as TextInput
+                value={p.role || null}
+                onChange={v => {
+                    const next = [...players];
+                    next[idx] = { ...next[idx], role: v as 'Citizen' | 'Doctor' | 'Sheriff' | 'Mafia'};
+                    setPlayers(next);
+                }}
+                options={['Citizen', 'Doctor', 'Sheriff', 'Mafia']}
+                placeholder="Role"
+                /> */}
             </View>
           </React.Fragment>
         ))}
+
+        <TouchableOpacity style={[
+        styles.playButton,
+        !allFieldsFilled && { opacity: 0.4 } // visually indicate disabled
+        ]} 
+        disabled={!allFieldsFilled}
+        onPress={handleStartGame}
+        >
+
+          <Text style={styles.playText}>Start Game</Text>
+
+        </TouchableOpacity>
       </ScrollView>
         </KeyboardAvoidingView>
     </SafeAreaView>
@@ -156,5 +235,28 @@ const styles = StyleSheet.create({
     height: 44,
     width: '46%',
     marginBottom: 16,
+  },
+
+  playButton: {
+    marginTop: 48,
+    backgroundColor: '#d71d24',        // Mafia‑red
+    paddingVertical: 18,
+    paddingHorizontal: 64,
+    borderRadius: 14,
+    elevation: 4,                       // Small Android shadow
+    shadowColor: '#000',                // iOS shadow
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    alignItems: 'center',               // ✅ Center text horizontally
+    justifyContent: 'center',   
+  },
+
+  playText: {
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
